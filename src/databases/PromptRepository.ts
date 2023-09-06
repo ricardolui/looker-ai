@@ -13,7 +13,9 @@ export class PromptRepository{
 
     public async getTopExplorePrompts(): Promise<Array<PromptModel>>
     {
-        const queryGetExplorePrompts = "SELECT description, prompt, model_explore as modelExplore FROM llm.explore_prompts";
+        // const queryGetExplorePrompts = "SELECT description, prompt, model_explore as modelExplore FROM llm.explore_prompts";
+        
+        const queryGetExplorePrompts = "SELECT null as description, null as prompt, null as modelExplore";
         const topPromptResults = await this.sql.execute<IPromptModel>(queryGetExplorePrompts);
         const promptModels: Array<PromptModel> = topPromptResults.map(row =>  new PromptModel(row)); 
         return promptModels;        

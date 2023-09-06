@@ -83,7 +83,7 @@ export class ExploreService {
         SELECT ml_generate_text_llm_result as r, ml_generate_text_status as status
         FROM
         ML.GENERATE_TEXT(
-            MODEL llm.llm_model,
+            MODEL bq_llm.llm_model,
             (
             ${selectPrompt}
             ),

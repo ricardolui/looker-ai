@@ -3,7 +3,7 @@ import {ITransportSettings} from "@looker/sdk-rtl";
 
 export class LookerSQLService {
     private lookerSDK: Looker40SDK;
-    private connectionName: string = "";
+    private connectionName: string = "bq-poc";
 
     public constructor(lookerSDK: Looker40SDK) {
        this.lookerSDK = lookerSDK;       

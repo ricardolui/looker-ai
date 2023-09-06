@@ -5,6 +5,7 @@ import { ComponentsProvider, Tabs2, Tab2 } from "@looker/components";
 import { ExtensionProvider} from '@looker/extension-sdk-react'
 import { hot } from 'react-hot-loader/root'
 
+import { POC } from './POC'
 import { Explore } from './Explore'
 import { Dashboard } from './Dashboard'
 import { Settings } from './Settings'
@@ -16,7 +17,10 @@ const ObjectContext = createContext<any | null>(null);
 export const App = hot(() => (
   <ExtensionProvider chattyTimeout={300000}>
     <ComponentsProvider>
-      <Tabs2 defaultTabId="explore">
+      <Tabs2 defaultTabId="poc">
+        <Tab2 id="poc" label="POC Universidade Cruzeiro do Sul" >
+          <POC />
+        </Tab2>
         <Tab2 id="explore" label="Generative Explores" >
           <Explore />
         </Tab2>

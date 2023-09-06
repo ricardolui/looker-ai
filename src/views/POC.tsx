@@ -12,7 +12,8 @@ import {
   FieldSelect, 
   ComboboxOptionObject,
   ComboboxCallback,
-  MaybeComboboxOptionObject
+  MaybeComboboxOptionObject,
+  TextArea
 } from '@looker/components'
 import { Dialog, DialogLayout} from '@looker/components'
 import { ExtensionContext , ExtensionContextData } from '@looker/extension-sdk-react'
@@ -21,7 +22,8 @@ import {
   ILookmlModel,
   ISqlQueryCreate,
   ILookmlModelExploreFieldset,
-  ILookmlModelExploreField
+  ILookmlModelExploreField,
+  Looker40SDK
 } from '@looker/sdk'
 import { Box, Heading } from '@looker/components'
 import { EmbedContainer } from './EmbedContainer'
@@ -32,14 +34,16 @@ import { Logger } from '../utils/Logger'
 import { ConfigReader } from '../services/ConfigReader'
 import { PromptService } from '../services/PromptService'
 import PromptModel from '../models/PromptModel'
+import { POCService } from '../services/POCService'
 /**
  * Looker GenAI - Explore Component
  */
-export const Explore: React.FC = () => {
+export const POC: React.FC = () => {
   const { core40SDK } =  useContext(ExtensionContext)
   const [message, setMessage] = useState('')
   const [loadingLookerModels, setLoadingLookerModels] = useState<boolean>(false)
   const [loadingLLM, setLoadingLLM] = useState<boolean>(false)
+  const [llmInsights, setLlmInsights] = useState<string>()
   const [lookerModels, setLookerModels] = useState<ILookmlModel[]>([])
   const [errorMessage, setErrorMessage] = useState<string>()
   const [allComboExplores, setAllComboExplores] = useState<ComboboxOptionObject[]>()  
@@ -60,7 +64,9 @@ export const Explore: React.FC = () => {
   const promptService: PromptService = new PromptService(core40SDK);
 
   useEffect(() => {
-    loadExplores();
+    // loadExplores();
+    setCurrentModelName('poc-results')
+    setPrompt("Quais foram as modalidades de curso com a maior quantidade de alunos com previsão de evadirem?")
     setShowInstructions(window.sessionStorage.getItem("showInstructions")==='true' || window.sessionStorage.getItem("showInstructions")==null)
   ;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +164,7 @@ export const Explore: React.FC = () => {
   // Method that clears the explores under the chat
   const handleClear = () => {    
     // Removes the first child    )
+    setLlmInsights("");
     exploreDivElement?.removeChild(exploreDivElement.firstChild!);
   }
 
@@ -196,74 +203,38 @@ export const Explore: React.FC = () => {
   }, [])
 
   // Method that triggers sending the message to the workflow
-  const handleSend = () =>
+  const handleSend = async () =>
   {    
     handleClearAll();  
     setLoadingLLM(true);
-    Logger.debug("Debug CustomPrompt" +  window.sessionStorage.getItem("customPrompt"));
-    const promptService = new PromptTemplateService(JSON.parse(window.sessionStorage.getItem("customPrompt")!));
-    const generativeExploreService = new ExploreService(core40SDK, promptService);
+
+    const generativePOCService = new POCService(core40SDK);
 
     // 1. Generate Prompt based on the current selected Looker Explore (Model + ExploreName)
-    Logger.info("1. Get the Metadata from Looker from the selected Explorer");    
-    if(currentModelName!=null && currentExploreName!=null)
-    {
-      core40SDK.lookml_model_explore(currentModelName, currentExploreName, "id, name, description, fields, label").then
-      (async exploreResult => {
-        Logger.info("2. Received Data from Looker");
-        // @ts-ignore
-        const fields:ILookmlModelExploreFieldset = exploreResult.value.fields;
-        const f_dimensions:ILookmlModelExploreField[]  =  fields.dimensions!;
-        const f_measures:ILookmlModelExploreField[]  =  fields.measures!;
-        const f_dim_measures = f_dimensions.concat(f_measures);
-        var my_fields:Array<FieldMetadata> = [];
-        if(f_dim_measures!=null)
-        {
-          for(var field of f_dim_measures)
-          {
-            var field_def:FieldMetadata = {
-              // "field_type": "Dimension", this is not needed
-              // "view_name": dimension.view_label,
-              label : field.label!,
-              name: field.name!,
-              // "type": dimension.type,
-              description: field.description!
-              // "sql": dimension.sql,
-            };
-            my_fields.push(field_def);
-          }          
-        }
-        if(!exploreResult.ok)
-        {
-          throw new Error("Missing value from explore result");
-        }
-        const viewName = exploreResult.value.name;
-        if (!prompt) {
-          throw new Error('missing user prompt, unable to create query');
-        }                
-        Logger.info("3. Generate Prompts and Send to BigQuery");
-        const { modelName, queryId, view } = await generativeExploreService.generatePromptSendToBigQuery(my_fields, prompt, currentModelName, viewName!);
-        // Update the Explore with New QueryId
-        LookerEmbedSDK.init(hostUrl!);
-        Logger.debug("explore not null: " + currentExploreId);
-        LookerEmbedSDK.createExploreWithUrl(hostUrl+ `/embed/explore/${modelName}/${view}?qid=${queryId}`)
-          .appendTo(exploreDivElement!)         
-          .build()          
-          .connect()                    
-          .then()          
-          .catch((error: Error) => {
-            Logger.error('Connection error', error);
-            setLoadingLLM(false);
-          });
-        setLoadingLLM(false);
-      })
-    }
-    else
-    {
-      setLoadingLLM(false);
-    }    
-  }
+    Logger.info("1. Get the Metadata from all Explores for Looker Model");   
+    setCurrentModelName('poc-results')
+    try {
+      // const { modelName, queryId, view } = await generativePOCService.generatePromptSendToBigQuery(my_fields, prompt, currentModelName, viewName!);
 
+      const modelData = await generativePOCService.allModelExploreMetadata(currentModelName!)
+      const promptResult = await generativePOCService.pocGeneratePromptSendToBigQuery(currentModelName!,modelData, prompt!)
+      const queryResult = await core40SDK.ok(core40SDK.run_inline_query({
+        result_format: 'csv',
+        body: JSON.parse(promptResult)}))
+      setLlmInsights(queryResult)
+    } catch (error) {
+      if(error instanceof Error)
+      {
+        setLlmInsights(`Unexpected error: ${error.message}`);
+      }
+      else
+      {
+        setLlmInsights(`Unexpected error:` + error);
+      }      
+    } finally {
+      setLoadingLLM(false);
+    }
+  }
   
   return (    
     <ComponentsProvider>
@@ -302,24 +273,7 @@ export const Explore: React.FC = () => {
           <Span fontSize="medium">
             Any doubts or feedback or bugs, send it to <b>looker-genai-extension@google.com</b>
           </Span>   
-          {/* <FieldSelect 
-            id="topExamplesId"           
-            label="Top Examples to Try"
-            onChange={selectTopPromptCombo}           
-            options={topPromptsCombos}
-            width={500}
-          /> */}
-
-          <FieldSelect                       
-            isFilterable
-            onFilter={onFilterComboBox}
-            isLoading={loadingLookerModels}
-            label="All Explores"
-            onChange={selectComboExplore}            
-            options={currentComboExplores}
-            width={500}
-            value={selectedModelExplore}
-          />    
+   
           <FieldTextArea            
             width="100%"
             label="Type your question"  
@@ -336,6 +290,11 @@ export const Explore: React.FC = () => {
             </DialogLayout>            
             </Dialog>        
           
+          <TextArea
+            disabled
+            placeholder="Insights from LLM Model"
+            value={llmInsights}
+          />
         <EmbedContainer ref={embedCtrRef}>          
         </EmbedContainer>
         </SpaceVertical>                                   
